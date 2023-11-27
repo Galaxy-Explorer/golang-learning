@@ -1,72 +1,56 @@
 package main
 
-import (
-    "fmt"
-    "strconv"
-    "sync"
-)
+import "fmt"
 
-type Task struct {
-    TaskID   int
-    TaskName string
+type Request struct {
+    a, b   int
+    replyc chan int // reply channel inside the Request
 }
 
-func generateTask(n int) chan *Task {
-    task := make(chan *Task)
-    go func(n int) {
-        for i := 0; i < n; i++ {
-            task <- &Task{
-                TaskID:   i,
-                TaskName: "",
-            }
-        }
-    }(n)
+type binOp func(a, b int) int
 
-    return task
-}
-func process(t *Task) {
-    go func(t *Task) {
-        t.TaskName = "XiangliZhen" + strconv.Itoa(t.TaskID)
-    }(t)
+func run(op binOp, req *Request) {
+    req.replyc <- op(req.a, req.b)
 }
 
-func Worker(p *Pool) {
-    task := &Task{}
+func server(op binOp, service chan *Request, quit chan bool) {
     for {
-        if len(p.Tasks) != 0 {
-            p.lock.Lock()
-            task = p.Tasks[0]
-            p.Tasks = p.Tasks[1:]
-            p.lock.Unlock()
-            process(task)
-        } else {
-            break
+        select {
+        case req := <-service:
+            go run(op, req)
+        case <-quit:
+            return
         }
     }
+}
+
+func startServer(op binOp) (service chan *Request, quit chan bool) {
+    service = make(chan *Request)
+    quit = make(chan bool)
+    go server(op, service, quit)
+    return service, quit
 }
 
 func main() {
-    tasks := []*Task{
-        {
-            TaskID:   1,
-            TaskName: "",
-        },
-        {
-            TaskID:   2,
-            TaskName: "",
-        },
-        {
-            TaskID:   3,
-            TaskName: "",
-        },
+    adder, quit := startServer(func(a, b int) int { return a + b })
+    const N = 100
+    var reqs [N]Request
+    for i := 0; i < N; i++ {
+        req := &reqs[i]
+        req.a = i
+        req.b = i + N
+        req.replyc = make(chan int)
+        adder <- req // adder is a channel of requests
     }
-    pool := &Pool{
-        lock:  sync.Mutex{},
-        Tasks: tasks,
+    // checks:
+    for i := N - 1; i >= 0; i-- {
+        // doesn’t matter what order
+        if <-reqs[i].replyc != N+2*i {
+            fmt.Println("fail at", i)
+        } else {
+            fmt.Println("Request: ", i, "is ok!")
+        }
     }
-    Worker(pool)
-
-    for i, task := range tasks {
-        fmt.Printf("%d: %+v\n", i, task)
-    }
+    quit <- true
+    fmt.Println("done")
 }
