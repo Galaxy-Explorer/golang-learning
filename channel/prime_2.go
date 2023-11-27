@@ -3,7 +3,7 @@ package channel
 import "fmt"
 
 // Send the sequence 2, 3, 4, ... to returned channel
-func generate() chan int {
+func generate2() chan int {
     ch := make(chan int)
     go func() {
         defer close(ch)
@@ -15,7 +15,7 @@ func generate() chan int {
 }
 
 // Filter out input values divisible by 'prime', send rest to returned channel
-func filter(in chan int, prime int) chan int {
+func filter2(in chan int, prime int) chan int {
     out := make(chan int)
     go func() {
         defer close(out)
@@ -27,18 +27,18 @@ func filter(in chan int, prime int) chan int {
     }()
     return out
 }
-func sieve(n int) chan int {
+func sieve2(n int) chan int {
     out := make(chan int)
     stop := false
     go func(stop bool) {
         defer close(out)
-        ch := generate()
+        ch := generate2()
         for !stop {
             prime := <-ch
             if prime > n {
                 stop = true
             }
-            ch = filter(ch, prime)
+            ch = filter2(ch, prime)
             if prime < n {
                 out <- prime
             }
@@ -48,7 +48,7 @@ func sieve(n int) chan int {
     return out
 }
 func Prime2() {
-    primes := sieve(100)
+    primes := sieve2(100)
     for x := range primes {
         fmt.Println(x)
     }

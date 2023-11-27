@@ -1,4 +1,4 @@
-package main
+package channel
 
 import (
     "fmt"
@@ -11,19 +11,11 @@ type Task struct {
     TaskName string
 }
 
-func generateTask(n int) chan *Task {
-    task := make(chan *Task)
-    go func(n int) {
-        for i := 0; i < n; i++ {
-            task <- &Task{
-                TaskID:   i,
-                TaskName: "",
-            }
-        }
-    }(n)
-
-    return task
+type Pool struct {
+    lock  sync.Mutex
+    Tasks []*Task
 }
+
 func process(t *Task) {
     go func(t *Task) {
         t.TaskName = "XiangliZhen" + strconv.Itoa(t.TaskID)
@@ -45,7 +37,7 @@ func Worker(p *Pool) {
     }
 }
 
-func main() {
+func testTask1() {
     tasks := []*Task{
         {
             TaskID:   1,
