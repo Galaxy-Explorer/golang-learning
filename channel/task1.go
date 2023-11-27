@@ -6,31 +6,31 @@ import (
     "sync"
 )
 
-type Task struct {
+type Task1 struct {
     TaskID   int
     TaskName string
 }
 
-type Pool struct {
+type Pool1 struct {
     lock  sync.Mutex
-    Tasks []*Task
+    Tasks []*Task1
 }
 
-func process(t *Task) {
-    go func(t *Task) {
+func process1(t *Task1) {
+    go func(t *Task1) {
         t.TaskName = "XiangliZhen" + strconv.Itoa(t.TaskID)
     }(t)
 }
 
-func Worker(p *Pool) {
-    task := &Task{}
+func Worker(p *Pool1) {
+    task := &Task1{}
     for {
         if len(p.Tasks) != 0 {
             p.lock.Lock()
             task = p.Tasks[0]
             p.Tasks = p.Tasks[1:]
             p.lock.Unlock()
-            process(task)
+            process1(task)
         } else {
             break
         }
@@ -38,7 +38,7 @@ func Worker(p *Pool) {
 }
 
 func testTask1() {
-    tasks := []*Task{
+    tasks := []*Task1{
         {
             TaskID:   1,
             TaskName: "",
@@ -52,7 +52,7 @@ func testTask1() {
             TaskName: "",
         },
     }
-    pool := &Pool{
+    pool := &Pool1{
         lock:  sync.Mutex{},
         Tasks: tasks,
     }

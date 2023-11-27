@@ -5,17 +5,17 @@ import (
     "strconv"
 )
 
-type task struct {
+type task2 struct {
     taskID   int
     taskName string
 }
 
-func sendWork(n int) chan *task {
-    chTask := make(chan *task)
+func sendWork2(n int) chan *task2 {
+    chTask := make(chan *task2)
     go func(n int) {
         defer close(chTask)
         for i := 0; i < n; i++ {
-            chTask <- &task{
+            chTask <- &task2{
                 taskID:   i,
                 taskName: "",
             }
@@ -25,17 +25,17 @@ func sendWork(n int) chan *task {
     return chTask
 }
 
-func process(t *task) {
+func process2(t *task2) {
     t.taskName = "XiangliZhen" + strconv.Itoa(t.taskID)
 }
 
-func worker(in, out chan *task) {
-    go func(in, out chan *task) {
+func worker2(in, out chan *task2) {
+    go func(in, out chan *task2) {
         for {
             // 对比打印素数，为啥这块可以检测到通道关闭
             t, ok := <-in
             if ok {
-                process(t)
+                process2(t)
                 out <- t
             } else {
                 close(out)
@@ -45,27 +45,10 @@ func worker(in, out chan *task) {
     }(in, out)
 }
 
-//var hashMap = map[int]string{1: "xianglizhen", 2: "lee", 3: "july"}
-//
-//func processChannel(in <-chan int, out chan<- string) {
-//    for inValue := range in {
-//        result := hashMap[inValue]
-//        out <- result
-//    }
-//}
-//func Selector() {
-//    sendChan := make(chan int)
-//    receiveChan := make(chan string)
-//    go processChannel(sendChan, receiveChan)
-//    sendChan <- 1
-//    res := <-receiveChan
-//    fmt.Println(res)
-//}
-
 func testTask2() {
-    pending := sendWork(100)
-    done := make(chan *task)
-    worker(pending, done)
+    pending := sendWork2(100)
+    done := make(chan *task2)
+    worker2(pending, done)
     for t := range done {
         fmt.Println(t.taskID, t.taskName)
     }
