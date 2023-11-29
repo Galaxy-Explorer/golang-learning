@@ -1,6 +1,8 @@
 package channel
 
-import "fmt"
+import (
+    "fmt"
+)
 
 type Request struct {
     a, b   int
@@ -19,7 +21,8 @@ func server(op binOp, service chan *Request, quit chan bool) {
         case req := <-service:
             go run(op, req)
         case <-quit:
-            return
+            return // 跳出当前循环
+
         }
     }
 }
