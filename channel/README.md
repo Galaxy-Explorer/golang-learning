@@ -61,6 +61,9 @@
   * [模拟python yield特性](lazy_generator.go)
   * [工厂函数](build_lazy_evaluator.go)
 * 限流
-  * 
+  * [管道](ch_limit.go)
+  * [滑动窗口算法]
+  * [漏桶算法]
+  * [令牌桶算法]
 * (C/S)模式
   * [c/s模式](cs.go)

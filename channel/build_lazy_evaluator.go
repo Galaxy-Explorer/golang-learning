@@ -8,6 +8,7 @@ type EvalFunc func(Any) (Any, Any)
 
 func BuildLazyEvaluator(evalFunc EvalFunc, initState Any) func() Any {
     retValChan := make(chan Any)
+    // 惰性生成器之所以惰性生成，也是因为后台起了一个协程来不停的计算下一个参数的返回值和状态参数
     loopFunc := func() {
         var actState = initState
         var retVal Any
