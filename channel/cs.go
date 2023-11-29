@@ -47,7 +47,7 @@ func testCS() {
         req.a = i
         req.b = i + N
         req.replyc = make(chan int)
-        adder <- req // adder is a channel of requests
+        adder <- req // adder is a channel of requests，server抛出了一个addr管道用于接受请求，
     }
     // checks:
     for i := 0; i < N; i++ {
