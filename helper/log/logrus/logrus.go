@@ -7,7 +7,7 @@ import (
     "golang_learning/helper/log/base"
     "golang_learning/helper/log/field"
 
-    "github.com/Sirupsen/logrus"
+    "github.com/sirupsen/logrus"
 )
 
 // loggerLogrus 代表基于logrus的日志记录器的类型。
