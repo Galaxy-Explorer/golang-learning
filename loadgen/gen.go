@@ -138,11 +138,14 @@ func (gen *myGenerator) asyncCall() {
             gen.sendResult(result)
         })
         rawResp := gen.callOne(&rawReq)
+        // 调用完成
         if !atomic.CompareAndSwapUint32(&callStatus, 0, 1) {
             return
         }
+        // 调用超时
         timer.Stop()
         var result *lib.CallResult
+        // 调用出错
         if rawResp.Err != nil {
             result = &lib.CallResult{
                 ID:     rawResp.ID,
@@ -151,6 +154,7 @@ func (gen *myGenerator) asyncCall() {
                 Msg:    rawResp.Err.Error(),
                 Elapse: rawResp.Elapse}
         } else {
+            // 对正常result的检查
             result = gen.caller.CheckResp(rawReq, *rawResp)
             result.Elapse = rawResp.Elapse
         }
