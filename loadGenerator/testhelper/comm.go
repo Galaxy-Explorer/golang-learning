@@ -2,54 +2,49 @@ package testhelper
 
 import (
     "bufio"
-    "bytes"
     "encoding/json"
     "fmt"
-    loadgenlib "golang_learning/loadgen/lib"
+    "golang_learning/loadGenerator/lib"
     "math/rand"
     "net"
     "time"
 )
 
 const (
-    DELIM = '\n' // 分隔符。
+    DELIM = '\n'
 )
 
-// operators 代表操作符切片。
 var operators = []string{"+", "-", "*", "/"}
 
-// TCPComm 表示TCP通讯器的结构。
 type TCPComm struct {
     addr string
 }
 
-// NewTCPComm 会新建一个TCP通讯器。
-func NewTCPComm(addr string) loadgenlib.Caller {
+func NewTCPComm(addr string) lib.Caller {
     return &TCPComm{addr: addr}
 }
 
-// BuildReq 会构建一个请求。
-func (comm *TCPComm) BuildReq() loadgenlib.RawReq {
+func (comm *TCPComm) BuildReq() lib.RawReq {
     id := time.Now().UnixNano()
     sreq := ServerReq{
-        ID: id,
-        Operands: []int{
-            int(rand.Int31n(1000) + 1),
-            int(rand.Int31n(1000) + 1)},
-        Operator: func() string {
-            return operators[rand.Int31n(100)%4]
-        }(),
+        ID:       id,
+        Operands: []int{int(rand.Int31n(1000) + 1), int(rand.Int31n(1000) + 1)},
+        Operator: func() string { return operators[rand.Int31n(100)%4] }(),
     }
     bytes, err := json.Marshal(sreq)
     if err != nil {
         panic(err)
     }
-    rawReq := loadgenlib.RawReq{ID: id, Req: bytes}
+    rawReq := lib.RawReq{
+        ID:  id,
+        Req: bytes,
+    }
     return rawReq
 }
 
-// Call 会发起一次通讯。
 func (comm *TCPComm) Call(req []byte, timeoutNS time.Duration) ([]byte, error) {
+    // 建立连接，server端 此处代码conn, err := server.listener.Accept()，也会生成一个TCP连接，并通过go reqHandler(conn) 处理该请求；
+    // 所以client端和server端的tcp连接是一一对应的，不存在拿错数据的情况；
     conn, err := net.DialTimeout("tcp", comm.addr, timeoutNS)
     if err != nil {
         return nil, err
@@ -61,17 +56,15 @@ func (comm *TCPComm) Call(req []byte, timeoutNS time.Duration) ([]byte, error) {
     return read(conn, DELIM)
 }
 
-// CheckResp 会检查响应内容。
-func (comm *TCPComm) CheckResp(
-    rawReq loadgenlib.RawReq, rawResp loadgenlib.RawResp) *loadgenlib.CallResult {
-    var commResult loadgenlib.CallResult
+func (comm *TCPComm) CheckResp(rawReq lib.RawReq, rawResp lib.RawResp) *lib.CallResult {
+    var commResult lib.CallResult
     commResult.ID = rawResp.ID
     commResult.Req = rawReq
     commResult.Resp = rawResp
     var sreq ServerReq
     err := json.Unmarshal(rawReq.Req, &sreq)
     if err != nil {
-        commResult.Code = loadgenlib.RET_CODE_FATAL_CALL
+        commResult.Code = lib.RET_CODE_FATAL_CALL
         commResult.Msg =
             fmt.Sprintf("Incorrectly formatted Req: %s!\n", string(rawReq.Req))
         return &commResult
@@ -79,55 +72,49 @@ func (comm *TCPComm) CheckResp(
     var sresp ServerResp
     err = json.Unmarshal(rawResp.Resp, &sresp)
     if err != nil {
-        commResult.Code = loadgenlib.RET_CODE_ERROR_RESPONSE
+        commResult.Code = lib.RET_CODE_ERROR_RESPONSE
         commResult.Msg =
             fmt.Sprintf("Incorrectly formatted Resp: %s!\n", string(rawResp.Resp))
         return &commResult
     }
+
+    // 此处的错误不太可能发生，因为TCP连接都是一一对应的，不存在拿错数据的情况
     if sresp.ID != sreq.ID {
-        commResult.Code = loadgenlib.RET_CODE_ERROR_RESPONSE
+        commResult.Code = lib.RET_CODE_ERROR_RESPONSE
         commResult.Msg =
             fmt.Sprintf("Inconsistent raw id! (%d != %d)\n", rawReq.ID, rawResp.ID)
         return &commResult
     }
+
     if sresp.Err != nil {
-        commResult.Code = loadgenlib.RET_CODE_ERROR_CALEE
+        commResult.Code = lib.RET_CODE_ERROR_CALEE
         commResult.Msg =
             fmt.Sprintf("Abnormal server: %s!\n", sresp.Err)
         return &commResult
     }
     if sresp.Result != op(sreq.Operands, sreq.Operator) {
-        commResult.Code = loadgenlib.RET_CODE_ERROR_RESPONSE
+        commResult.Code = lib.RET_CODE_ERROR_RESPONSE
         commResult.Msg =
             fmt.Sprintf(
                 "Incorrect result: %s!\n",
                 genFormula(sreq.Operands, sreq.Operator, sresp.Result, false))
         return &commResult
     }
-    commResult.Code = loadgenlib.RET_CODE_SUCCESS
+    commResult.Code = lib.RET_CODE_SUCCESS
     commResult.Msg = fmt.Sprintf("Success. (%s)", sresp.Formula)
     return &commResult
 }
 
-// read 会从连接中读数据直到遇到参数delim代表的字节。
 func read(conn net.Conn, delim byte) ([]byte, error) {
-    readBytes := make([]byte, 1)
-    var buffer bytes.Buffer
-    for {
-        _, err := conn.Read(readBytes)
-        if err != nil {
-            return nil, err
-        }
-        readByte := readBytes[0]
-        if readByte == delim {
-            break
-        }
-        buffer.WriteByte(readByte)
+    reader := bufio.NewReader(conn)
+    content, err := reader.ReadBytes(delim)
+    if err != nil {
+        return nil, err
     }
-    return buffer.Bytes(), nil
+
+    return content, nil
 }
 
-// write 会向连接写数据，并在最后追加参数delim代表的字节。
 func write(conn net.Conn, content []byte, delim byte) (int, error) {
     writer := bufio.NewWriter(conn)
     n, err := writer.Write(content)
@@ -137,5 +124,5 @@ func write(conn net.Conn, content []byte, delim byte) (int, error) {
     if err == nil {
         err = writer.Flush()
     }
-    return n, err
+    return n, nil
 }

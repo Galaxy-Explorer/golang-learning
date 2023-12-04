@@ -1,11 +1,11 @@
-package loadgen
+package loadGenerator
 
 import (
     "testing"
     "time"
 
-    loadgenlib "golang_learning/loadgen/lib"
-    helper "golang_learning/loadgen/testhelper"
+    loadgenlib "golang_learning/loadGenerator/lib"
+    helper "golang_learning/loadGenerator/testhelper"
 )
 
 // printDetail 代表是否打印详细结果。

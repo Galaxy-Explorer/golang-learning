@@ -1,34 +1,29 @@
-package loadgen
+package loadGenerator
 
 import (
     "bytes"
     "errors"
     "fmt"
+    "golang_learning/loadGenerator/lib"
     "strings"
     "time"
-
-    "golang_learning/loadgen/lib"
 )
 
-// ParamSet 代表了载荷发生器参数的集合。
 type ParamSet struct {
-    Caller     lib.Caller           // 调用器。
-    TimeoutNS  time.Duration        // 响应超时时间，单位：纳秒。
-    LPS        uint32               // 每秒载荷量。
-    DurationNS time.Duration        // 负载持续时间，单位：纳秒。
-    ResultCh   chan *lib.CallResult // 调用结果通道。
+    Caller     lib.Caller
+    TimeoutNS  time.Duration
+    LPS        uint32
+    DurationNS time.Duration
+    ResultCh   chan *lib.CallResult
 }
 
-// Check 会检查当前值的所有字段的有效性。
-// 若存在无效字段则返回值非nil。
 func (pset *ParamSet) Check() error {
     var errMsgs []string
-
     if pset.Caller == nil {
         errMsgs = append(errMsgs, "Invalid caller!")
     }
     if pset.TimeoutNS == 0 {
-        errMsgs = append(errMsgs, "Invalid timeoutNS!")
+        errMsgs = append(errMsgs, "Invalid TimeoutNS!")
     }
     if pset.LPS == 0 {
         errMsgs = append(errMsgs, "Invalid lps(load per second)!")
@@ -40,7 +35,7 @@ func (pset *ParamSet) Check() error {
         errMsgs = append(errMsgs, "Invalid result channel!")
     }
     var buf bytes.Buffer
-    buf.WriteString("Checking the parameters...")
+    buf.WriteString("checking the parameters...")
     if errMsgs != nil {
         errMsg := strings.Join(errMsgs, " ")
         buf.WriteString(fmt.Sprintf("NOT passed! (%s)", errMsg))

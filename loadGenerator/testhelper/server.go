@@ -5,24 +5,20 @@ import (
     "encoding/json"
     "errors"
     "fmt"
+    "golang_learning/helper/log"
     "net"
     "strconv"
     "sync/atomic"
-
-    "golang_learning/helper/log"
 )
 
-// 日志记录器。
 var logger = log.DLogger()
 
-// ServerReq 表示服务器请求的结构。
 type ServerReq struct {
     ID       int64
     Operands []int
     Operator string
 }
 
-// ServerResp 表示服务器响应的结构。
 type ServerResp struct {
     ID      int64
     Formula string
@@ -66,10 +62,10 @@ func op(operands []int, operator string) int {
             }
         }
     }
+
     return result
 }
 
-// genFormula 会根据参数生成字符串形式的公式。
 func genFormula(operands []int, operator string, result int, equal bool) string {
     var buff bytes.Buffer
     n := len(operands)
@@ -79,7 +75,6 @@ func genFormula(operands []int, operator string, result int, equal bool) string 
             buff.WriteString(operator)
             buff.WriteString(" ")
         }
-
         buff.WriteString(strconv.Itoa(operands[i]))
     }
     if equal {
@@ -91,7 +86,7 @@ func genFormula(operands []int, operator string, result int, equal bool) string 
     return buff.String()
 }
 
-// reqHandler 会把参数sresp代表的请求转换为数据并发送给连接。
+// 从conn中读取数据，再经过运算，生成sresp写入到conn中
 func reqHandler(conn net.Conn) {
     var errMsg string
     var sresp ServerResp
@@ -123,18 +118,15 @@ func reqHandler(conn net.Conn) {
     }
 }
 
-// TCPServer 表示基于TCP协议的服务器。
 type TCPServer struct {
     listener net.Listener
     active   uint32 // 0-未激活；1-已激活。
 }
 
-// NewTCPServer 会新建一个基于TCP协议的服务器。
 func NewTCPServer() *TCPServer {
     return &TCPServer{}
 }
 
-// init 会初始化服务器。
 func (server *TCPServer) init(addr string) error {
     if !atomic.CompareAndSwapUint32(&server.active, 0, 1) {
         return nil
@@ -148,17 +140,18 @@ func (server *TCPServer) init(addr string) error {
     return nil
 }
 
-// Listen 会启动对指定网络地址的监听。
 func (server *TCPServer) Listen(addr string) error {
     err := server.init(addr)
     if err != nil {
         return err
     }
+
     go func() {
         for {
             if atomic.LoadUint32(&server.active) != 1 {
                 break
             }
+            // 都是短连接，且server层连接和client连接是一一对应的
             conn, err := server.listener.Accept()
             if err != nil {
                 if atomic.LoadUint32(&server.active) == 1 {
@@ -174,7 +167,6 @@ func (server *TCPServer) Listen(addr string) error {
     return nil
 }
 
-// Close 会关闭服务器。
 func (server *TCPServer) Close() bool {
     if !atomic.CompareAndSwapUint32(&server.active, 1, 0) {
         return false
