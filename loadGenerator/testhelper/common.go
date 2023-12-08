@@ -2,8 +2,11 @@ package testhelper
 
 import (
     "bufio"
+    "golang_learning/helper/log"
     "net"
 )
+
+var logger = log.DLogger()
 
 func read(conn net.Conn, delim byte) ([]byte, error) {
     reader := bufio.NewReader(conn)

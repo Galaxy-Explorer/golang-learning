@@ -2,16 +2,10 @@ package testhelper
 
 import (
     "bytes"
-    "encoding/json"
-    "errors"
     "fmt"
-    "golang_learning/helper/log"
     "net"
     "strconv"
-    "sync/atomic"
 )
-
-var logger = log.DLogger()
 
 type ServerReq struct {
     ID       int64
@@ -23,46 +17,45 @@ type ServerResp struct {
     ID      int64
     Formula string
     Result  int
-    Err     error
+    errMsg  error
 }
 
 func op(operands []int, operator string) int {
     var result int
     switch {
     case operator == "+":
-        for _, v := range operands {
+        for _, operand := range operands {
             if result == 0 {
-                result = v
+                result = operand
             } else {
-                result += v
+                result += operand
             }
         }
     case operator == "-":
-        for _, v := range operands {
+        for _, operand := range operands {
             if result == 0 {
-                result = v
+                result = operand
             } else {
-                result -= v
+                result -= operand
             }
         }
     case operator == "*":
-        for _, v := range operands {
+        for _, operand := range operands {
             if result == 0 {
-                result = v
+                result = operand
             } else {
-                result *= v
+                result *= operand
             }
         }
     case operator == "/":
-        for _, v := range operands {
+        for _, operand := range operands {
             if result == 0 {
-                result = v
+                result = operand
             } else {
-                result /= v
+                result /= operand
             }
         }
     }
-
     return result
 }
 
@@ -78,15 +71,14 @@ func genFormula(operands []int, operator string, result int, equal bool) string 
         buff.WriteString(strconv.Itoa(operands[i]))
     }
     if equal {
-        buff.WriteString(" = ")
+        buff.WriteString("=")
     } else {
-        buff.WriteString(" != ")
+        buff.WriteString("!=")
     }
     buff.WriteString(strconv.Itoa(result))
     return buff.String()
 }
 
-// 从conn中读取数据，再经过运算，生成sresp写入到conn中
 func reqHandler(conn net.Conn) {
     var errMsg string
     var sresp ServerResp
@@ -94,83 +86,6 @@ func reqHandler(conn net.Conn) {
     if err != nil {
         errMsg = fmt.Sprintf("Server: Req Read Error: %s", err)
     } else {
-        var sreq ServerReq
-        err := json.Unmarshal(req, &sreq)
-        if err != nil {
-            errMsg = fmt.Sprintf("Server: Req Unmarshal Error: %s", err)
-        } else {
-            sresp.ID = sreq.ID
-            sresp.Result = op(sreq.Operands, sreq.Operator)
-            sresp.Formula =
-                genFormula(sreq.Operands, sreq.Operator, sresp.Result, true)
-        }
-    }
-    if errMsg != "" {
-        sresp.Err = errors.New(errMsg)
-    }
-    bytes, err := json.Marshal(sresp)
-    if err != nil {
-        logger.Errorf("Server: Resp Marshal Error: %s", err)
-    }
-    _, err = write(conn, bytes, DELIM)
-    if err != nil {
-        logger.Errorf("Server: Resp Write error: %s", err)
-    }
-}
 
-type TCPServer struct {
-    listener net.Listener
-    active   uint32 // 0-未激活；1-已激活。
-}
-
-func NewTCPServer() *TCPServer {
-    return &TCPServer{}
-}
-
-func (server *TCPServer) init(addr string) error {
-    if !atomic.CompareAndSwapUint32(&server.active, 0, 1) {
-        return nil
     }
-    ln, err := net.Listen("tcp", addr)
-    if err != nil {
-        atomic.StoreUint32(&server.active, 0)
-        return err
-    }
-    server.listener = ln
-    return nil
-}
-
-func (server *TCPServer) Listen(addr string) error {
-    err := server.init(addr)
-    if err != nil {
-        return err
-    }
-
-    go func() {
-        for {
-            if atomic.LoadUint32(&server.active) != 1 {
-                break
-            }
-            // 都是短连接，且server层连接和client连接是一一对应的
-            conn, err := server.listener.Accept()
-            if err != nil {
-                if atomic.LoadUint32(&server.active) == 1 {
-                    logger.Errorf("Server: Request Acception Error: %s\n", err)
-                } else {
-                    logger.Warnf("Server: Broken acception because of closed network connection.")
-                }
-                continue
-            }
-            go reqHandler(conn)
-        }
-    }()
-    return nil
-}
-
-func (server *TCPServer) Close() bool {
-    if !atomic.CompareAndSwapUint32(&server.active, 1, 0) {
-        return false
-    }
-    server.listener.Close()
-    return true
 }
