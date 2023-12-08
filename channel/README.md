@@ -30,7 +30,7 @@
 * [向未初始化nil channel中写入数据，从而导致读nil管道引起死锁](deadlock_3.go)
 * [向未初始化nil channel中读取数据，从而导致写nil管道引起死锁](deadlock_4.go)
 * [没有发送者，但是还要从管道读取数据，引发阻塞，发生死锁](deadlock_5.go)
-* [发送者goroutine已经关闭，接受者goroutine发生阻塞](deadlock_6.go)
+* [没有发送者，接受者goroutine发生阻塞](deadlock_6.go)
 * [有缓冲区，但是缓冲区已满，发送数据阻塞，引起死锁](deadlock_7.go)
 * [有缓冲区，但是缓冲区为空，读取数据阻塞，引起死锁](deadlock_8.go)
 * [读取一个关闭的管道，不会引发死锁，而是返回该类型的0值](deadlock_9.go)

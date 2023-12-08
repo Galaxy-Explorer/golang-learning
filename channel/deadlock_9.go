@@ -5,10 +5,11 @@ import "fmt"
 func DeadLock9() {
     var ch = make(chan int)
     go func() {
+        defer close(ch)
         for i := 0; i < 10; i++ {
             ch <- i
         }
-        close(ch)
+
     }()
     for {
         x, ok := <-ch
