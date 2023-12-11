@@ -19,29 +19,28 @@ type myGenerator struct {
     timeoutNS   time.Duration
     lps         uint32
     durationNS  time.Duration
-    resultCh    chan *lib.CallResult
     concurrency uint32
     tickets     lib.GoTickets
-    stopSign    chan struct{}
     ctx         context.Context
     cancelFunc  context.CancelFunc
     callCount   int64
     status      uint32
+    resultCh    chan *lib.CallResult
 }
 
-func NewGenerator(pset ParamSet) (lib.Generator, error) {
-
+func NewGenerator(pSet ParamSet) (lib.Generator, error) {
     logger.Infoln("New a load generator...")
-    if err := pset.Check(); err != nil {
+    if err := pSet.Check(); err != nil {
         return nil, err
     }
+    // 新建一个指针类型，该指针类型实现了Generator，所以可以返回
     gen := &myGenerator{
-        caller:     pset.Caller,
-        timeoutNS:  pset.TimeoutNS,
-        lps:        pset.LPS,
-        durationNS: pset.DurationNS,
-        status:     lib.STATUS_ORIGINAL,
-        resultCh:   pset.ResultCh,
+        caller:     pSet.Caller,
+        timeoutNS:  pSet.TimeoutNS,
+        lps:        pSet.LPS,
+        durationNS: pSet.DurationNS,
+        status:     lib.StatusOriginal,
+        resultCh:   pSet.ResultCh,
     }
     if err := gen.init(); err != nil {
         return nil, err
@@ -52,7 +51,6 @@ func NewGenerator(pset ParamSet) (lib.Generator, error) {
 func (gen *myGenerator) init() error {
     var buf bytes.Buffer
     buf.WriteString("Initializing the load generator...")
-    // 载荷的并发量 ≈ 载荷的响应超时时间 / 载荷的发送间隔时间
     var total64 = int64(gen.timeoutNS)/int64(1e9/gen.lps) + 1
     if total64 > math.MaxInt32 {
         total64 = math.MaxInt32
@@ -63,7 +61,6 @@ func (gen *myGenerator) init() error {
         return err
     }
     gen.tickets = tickets
-
     buf.WriteString(fmt.Sprintf("Done. (concurrency=%d)", gen.concurrency))
     logger.Infoln(buf.String())
     return nil
@@ -72,7 +69,7 @@ func (gen *myGenerator) init() error {
 func (gen *myGenerator) callOne(rawReq *lib.RawReq) *lib.RawResp {
     atomic.AddInt64(&gen.callCount, 1)
     if rawReq == nil {
-        return &lib.RawResp{ID: -1, Err: errors.New("Invalid raw request.")}
+        return &lib.RawResp{ID: -1, Err: errors.New("invalid raw request")}
     }
     start := time.Now().UnixNano()
     resp, err := gen.caller.Call(rawReq.Req, gen.timeoutNS)
@@ -82,84 +79,78 @@ func (gen *myGenerator) callOne(rawReq *lib.RawReq) *lib.RawResp {
     if err != nil {
         errMsg := fmt.Sprintf("Sync Call Error: %s.", err)
         rawResp = lib.RawResp{
-            ID:     rawReq.ID,
-            Err:    errors.New(errMsg),
-            Elapse: elapsedTime}
+            ID:      rawReq.ID,
+            Err:     errors.New(errMsg),
+            Elapsed: elapsedTime,
+        }
     } else {
         rawResp = lib.RawResp{
-            ID:     rawReq.ID,
-            Resp:   resp,
-            Elapse: elapsedTime}
+            ID:      rawReq.ID,
+            Resp:    resp,
+            Elapsed: elapsedTime}
     }
     return &rawResp
 }
 
 func (gen *myGenerator) asyncCall() {
     gen.tickets.Take()
-    go func() {
-        defer func() {
-            if p := recover(); p != nil {
-                err, ok := interface{}(p).(error)
-                var errMsg string
-                if ok {
-                    errMsg = fmt.Sprintf("Async Call Panic! (error: %s)", err)
-                } else {
-                    errMsg = fmt.Sprintf("Async Call Panic! (clue: %#v)", p)
-                }
-                logger.Errorln(errMsg)
-                result := &lib.CallResult{
-                    ID:   -1,
-                    Code: lib.RET_CODE_FATAL_CALL,
-                    Msg:  errMsg}
-                gen.sendResult(result)
+    defer func() {
+        if p := recover(); p != nil {
+            err, ok := interface{}(p).(error)
+            var errMsg string
+            if ok {
+                errMsg = fmt.Sprintf("Async Call Panic! (error: %s)", err)
+            } else {
+                errMsg = fmt.Sprintf("Async Call Panic! (clue: %#v)", p)
             }
-            gen.tickets.Return()
-        }()
-        rawReq := gen.caller.BuildReq()
-        // 调用状态：0-未调用或调用中；1-调用完成；2-调用超时。
-        var callStatus uint32
-        timer := time.AfterFunc(gen.timeoutNS, func() {
-            if !atomic.CompareAndSwapUint32(&callStatus, 0, 2) {
-                return
-            }
+            logger.Errorln(errMsg)
             result := &lib.CallResult{
-                ID:     rawReq.ID,
-                Req:    rawReq,
-                Code:   lib.RET_CODE_WARNING_TIMEOUT,
-                Msg:    fmt.Sprintf("Timeout! (expected: < %v)", gen.timeoutNS),
-                Elapse: gen.timeoutNS,
+                ID:   -1,
+                Code: lib.RetCodeFatalCall,
+                Msg:  errMsg,
             }
             gen.sendResult(result)
-        })
-
-        // callOne 这个方法里，rawResp.ID = rawReq.ID
-        rawResp := gen.callOne(&rawReq)
-        // 调用完成
-        if !atomic.CompareAndSwapUint32(&callStatus, 0, 1) {
+        }
+        gen.tickets.Return()
+    }()
+    rawReq := gen.caller.BuildReq()
+    var callStatus uint32
+    timer := time.AfterFunc(gen.timeoutNS, func() {
+        if !atomic.CompareAndSwapUint32(&callStatus, 0, 2) {
             return
         }
-        // 调用超时
-        timer.Stop()
-        var result *lib.CallResult
-        // 调用出错
-        if rawResp.Err != nil {
-            result = &lib.CallResult{
-                ID:     rawResp.ID,
-                Req:    rawReq,
-                Code:   lib.RET_CODE_ERROR_CALL,
-                Msg:    rawResp.Err.Error(),
-                Elapse: rawResp.Elapse}
-        } else {
-            // 对正常result的检查
-            result = gen.caller.CheckResp(rawReq, *rawResp)
-            result.Elapse = rawResp.Elapse
+        result := &lib.CallResult{
+            ID:     rawReq.ID,
+            Req:    rawReq,
+            Code:   lib.RetCodeWarningCallTimeout,
+            Msg:    fmt.Sprintf("Timeout! (expected: < %v)", gen.timeoutNS),
+            Elapse: gen.timeoutNS,
         }
+
         gen.sendResult(result)
-    }()
+    })
+    rawResp := gen.callOne(&rawReq)
+    if !atomic.CompareAndSwapUint32(&callStatus, 0, 1) {
+        return
+    }
+    timer.Stop()
+    var result *lib.CallResult
+    if rawResp.Err != nil {
+        result = &lib.CallResult{
+            ID:     rawResp.ID,
+            Req:    rawReq,
+            Code:   lib.RetCodeErrorCall,
+            Msg:    rawResp.Err.Error(),
+            Elapse: rawResp.Elapsed}
+    } else {
+        result = gen.caller.CheckResp(rawReq, *rawResp)
+        result.Elapse = rawResp.Elapsed
+    }
+    gen.sendResult(result)
 }
 
 func (gen *myGenerator) sendResult(result *lib.CallResult) bool {
-    if atomic.LoadUint32(&gen.status) != lib.STATUS_STARTED {
+    if atomic.LoadUint32(&gen.status) != lib.StatusStarted {
         gen.printIgnoredResult(result, "stopped load generator")
         return false
     }
@@ -170,6 +161,7 @@ func (gen *myGenerator) sendResult(result *lib.CallResult) bool {
         gen.printIgnoredResult(result, "full result channel")
         return false
     }
+
 }
 
 func (gen *myGenerator) printIgnoredResult(result *lib.CallResult, cause string) {
@@ -179,20 +171,19 @@ func (gen *myGenerator) printIgnoredResult(result *lib.CallResult, cause string)
     logger.Warnf("Ignored result: %s. (cause: %s)\n", resultMsg, cause)
 }
 
-func (gen *myGenerator) prepareToStop(ctxError error) {
+func (gen *myGenerator) prepareStop(ctxError error) {
     logger.Infof("Prepare to stop load generator (cause: %s)...", ctxError)
-    atomic.CompareAndSwapUint32(
-        &gen.status, lib.STATUS_STARTED, lib.STATUS_STOPPING)
+    atomic.CompareAndSwapUint32(&gen.status, lib.StatusStarted, lib.StatusStopping)
     logger.Infof("Closing result channel...")
     close(gen.resultCh)
-    atomic.StoreUint32(&gen.status, lib.STATUS_STOPPED)
+    atomic.StoreUint32(&gen.status, lib.StatusStopped)
 }
 
 func (gen *myGenerator) genLoad(throttle <-chan time.Time) {
     for {
         select {
         case <-gen.ctx.Done():
-            gen.prepareToStop(gen.ctx.Err())
+            gen.prepareStop(gen.ctx.Err())
             return
         default:
         }
@@ -201,7 +192,6 @@ func (gen *myGenerator) genLoad(throttle <-chan time.Time) {
             select {
             case <-throttle:
             case <-gen.ctx.Done():
-                gen.prepareToStop(gen.ctx.Err())
                 return
             }
         }
@@ -210,35 +200,25 @@ func (gen *myGenerator) genLoad(throttle <-chan time.Time) {
 
 func (gen *myGenerator) Start() bool {
     logger.Infoln("Starting load generator...")
-    // 检查是否具备可启动的状态，顺便设置状态为正在启动
-    if !atomic.CompareAndSwapUint32(
-        &gen.status, lib.STATUS_ORIGINAL, lib.STATUS_STARTING) {
-        if !atomic.CompareAndSwapUint32(
-            &gen.status, lib.STATUS_STOPPED, lib.STATUS_STARTING) {
+    if !atomic.CompareAndSwapUint32(&gen.status, lib.StatusOriginal, lib.StatusStarting) {
+        if !atomic.CompareAndSwapUint32(&gen.status, lib.StatusStopped, lib.StatusStarting) {
             return false
         }
     }
 
-    // 设定节流阀。
     var throttle <-chan time.Time
     if gen.lps > 0 {
         interval := time.Duration(1e9 / gen.lps)
         logger.Infof("Setting throttle (%v)...", interval)
         throttle = time.Tick(interval)
     }
+    gen.ctx, gen.cancelFunc = context.WithTimeout(context.Background(), gen.durationNS)
 
-    // 初始化上下文和取消函数。
-    gen.ctx, gen.cancelFunc = context.WithTimeout(
-        context.Background(), gen.durationNS)
-
-    // 初始化调用计数。
     gen.callCount = 0
 
-    // 设置状态为已启动。
-    atomic.StoreUint32(&gen.status, lib.STATUS_STARTED)
+    atomic.StoreUint32(&gen.status, lib.StatusStarted)
 
     go func() {
-        // 生成并发送载荷。
         logger.Infoln("Generating loads...")
         gen.genLoad(throttle)
         logger.Infof("Stopped. (call count: %d)", gen.callCount)
@@ -247,18 +227,18 @@ func (gen *myGenerator) Start() bool {
 }
 
 func (gen *myGenerator) Stop() bool {
-    if !atomic.CompareAndSwapUint32(
-        &gen.status, lib.STATUS_STARTED, lib.STATUS_STOPPING) {
+    if atomic.CompareAndSwapUint32(&gen.status, lib.StatusStarted, lib.StatusStopping) {
         return false
     }
     gen.cancelFunc()
     for {
-        if atomic.LoadUint32(&gen.status) == lib.STATUS_STOPPED {
+        if atomic.LoadUint32(&gen.status) == lib.StatusStopped {
             break
         }
         time.Sleep(time.Microsecond)
     }
     return true
+
 }
 
 func (gen *myGenerator) Status() uint32 {

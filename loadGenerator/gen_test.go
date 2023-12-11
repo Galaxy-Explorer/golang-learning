@@ -9,7 +9,7 @@ import (
 )
 
 // printDetail 代表是否打印详细结果。
-var printDetail = false
+var printDetail = true
 
 func TestStart(t *testing.T) {
 
@@ -26,7 +26,7 @@ func TestStart(t *testing.T) {
 
     // 初始化载荷发生器。
     pset := ParamSet{
-        Caller:     helper.NewTCPComm(serverAddr),
+        Caller:     helper.NewTcpComm(serverAddr),
         TimeoutNS:  50 * time.Millisecond,
         LPS:        uint32(1000),
         DurationNS: 10 * time.Second,
@@ -65,7 +65,7 @@ func TestStart(t *testing.T) {
     }
 
     t.Logf("Total: %d.\n", total)
-    successCount := countMap[loadgenlib.RET_CODE_SUCCESS]
+    successCount := countMap[loadgenlib.RetCodeSuccess]
     tps := float64(successCount) / float64(pset.DurationNS/1e9)
     t.Logf("Loads per second: %d; Treatments per second: %f.\n", pset.LPS, tps)
 }
@@ -85,7 +85,7 @@ func TestStop(t *testing.T) {
 
     // 初始化载荷发生器。
     pset := ParamSet{
-        Caller:     helper.NewTCPComm(serverAddr),
+        Caller:     helper.NewTcpComm(serverAddr),
         TimeoutNS:  50 * time.Millisecond,
         LPS:        uint32(1000),
         DurationNS: 10 * time.Second,
@@ -130,7 +130,7 @@ func TestStop(t *testing.T) {
     }
 
     t.Logf("Total: %d.\n", total)
-    successCount := countMap[loadgenlib.RET_CODE_SUCCESS]
+    successCount := countMap[loadgenlib.RetCodeSuccess]
     tps := float64(successCount) / float64(timeoutNS/1e9)
     t.Logf("Loads per second: %d; Treatments per second: %f.\n", pset.LPS, tps)
 }
