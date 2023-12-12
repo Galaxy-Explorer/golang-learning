@@ -20,6 +20,7 @@ func TestHelper(t *testing.T) {
     conn := NewTcpComm(serverAddr)
     rawReq := conn.BuildReq()
     start := time.Now().UnixNano()
+    // 超时时间设置较短，容易出现timout的问题
     bytes, err := conn.Call(rawReq.Req, 1000*time.Microsecond)
     if err != nil {
         logger.Errorf("request call is error:(%s)...\n", err)
